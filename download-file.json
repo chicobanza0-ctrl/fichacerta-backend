@@ -1,0 +1,398 @@
+import { useState, useEffect, useCallback } from "react";
+import { Lock, Mail, ShieldCheck, Copy, Check, LogOut, KeyRound, ChevronRight, Ticket, Flame, Shield, RotateCcw, AlertTriangle } from "lucide-react";
+
+// ---- Brand tokens -------------------------------------------------------
+const INK = "#12201A";
+const PITCH = "#0B3D2E";
+const PITCH_DARK = "#082A20";
+const TURF = "#8BC53F";
+const CREAM = "#F5F0E1";
+const AMBER = "#E8A33D";
+const RUST = "#C1443C";
+
+const displayFont = "'Oswald', 'Arial Narrow', sans-serif";
+const bodyFont = "'Inter', 'Helvetica Neue', Arial, sans-serif";
+
+// ---------------------------------------------------------------------
+// IMPORTANTE: troque pela URL real do backend depois que ele estiver
+// implantado (ver README do projeto fichacerta-backend). Enquanto este
+// valor apontar para localhost/placeholder, as chamadas abaixo vão falhar
+// — isso é esperado até o backend estar no ar.
+// ---------------------------------------------------------------------
+const API_BASE = "https://SEU-BACKEND-AQUI.exemplo.com";
+
+async function api(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  let data = {};
+  try { data = await res.json(); } catch {}
+  if (!res.ok) throw new Error(data.error || `Erro (${res.status})`);
+  return data;
+}
+
+const pct = (p) => `${Math.round(p * 100)}%`;
+const oddFmt = (o) => Number(o).toFixed(2);
+
+function CopyCode({ code }) {
+  const [copied, setCopied] = useState(false);
+  const doCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch { setCopied(false); }
+  };
+  return (
+    <button onClick={doCopy} className="w-full flex items-center justify-between rounded-md px-3 py-2 mt-2 transition" style={{ background: INK, color: CREAM, fontFamily: bodyFont }}>
+      <span className="flex items-center gap-2 text-sm">
+        <span className="uppercase tracking-wide text-xs" style={{ color: AMBER }}>Código</span>
+        <span className="font-mono">{code}</span>
+      </span>
+      {copied ? <Check size={16} color={TURF} /> : <Copy size={16} />}
+    </button>
+  );
+}
+
+function Notch({ side }) {
+  return <div className="absolute top-1/2 -translate-y-1/2" style={{ [side]: -10, width: 20, height: 20, borderRadius: "9999px", background: PITCH_DARK }} />;
+}
+
+function FichaTicket({ title, icon, riskNote, picks, oddTotal, probTotal, code, accent }) {
+  return (
+    <div className="relative rounded-xl shadow-lg overflow-hidden" style={{ background: CREAM, color: INK }}>
+      <div className="px-4 pt-4 pb-3 flex items-center gap-2" style={{ borderBottom: `2px dashed ${INK}22` }}>
+        <span style={{ color: accent }}>{icon}</span>
+        <h3 className="text-lg tracking-wide" style={{ fontFamily: displayFont, color: PITCH }}>{title}</h3>
+      </div>
+      <div className="px-4 py-3 flex flex-col gap-3">
+        {picks.map((s, i) => (
+          <div key={i} className="flex flex-col gap-0.5">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-semibold">{s.home} x {s.away}</span>
+              <span className="text-xs opacity-70">{s.time}</span>
+            </div>
+            <div className="text-xs opacity-60">{s.comp}</div>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-sm">{s.market.label}</span>
+              <span className="text-sm font-mono px-2 py-0.5 rounded" style={{ background: `${accent}22`, color: PITCH }}>{oddFmt(s.market.odd)}</span>
+            </div>
+            <div className="text-xs opacity-60 italic">{s.market.note}</div>
+            <div className="text-xs opacity-50">Probabilidade estimada: {pct(s.market.prob)}</div>
+          </div>
+        ))}
+      </div>
+      <div className="relative px-4 py-3" style={{ borderTop: `2px dashed ${INK}22`, background: `${accent}10` }}>
+        <Notch side="left" /><Notch side="right" />
+        <div className="flex items-center justify-between">
+          <span className="text-xs uppercase tracking-wide opacity-70">Odd total</span>
+          <span className="text-xl font-mono" style={{ fontFamily: displayFont, color: PITCH }}>{oddFmt(oddTotal)}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs opacity-60 mt-0.5">
+          <span>Probabilidade combinada estimada</span>
+          <span>{pct(probTotal)}</span>
+        </div>
+        {riskNote && <div className="text-xs mt-2 px-2 py-1 rounded" style={{ background: `${RUST}18`, color: RUST }}>{riskNote}</div>}
+        <CopyCode code={code} />
+      </div>
+    </div>
+  );
+}
+
+function AuthShell({ children, footer }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: PITCH, fontFamily: bodyFont }}>
+      <div className="w-full max-w-sm">
+        <div className="flex items-center justify-center gap-2 mb-6">
+          <Ticket color={AMBER} size={28} />
+          <span className="text-2xl tracking-widest" style={{ fontFamily: displayFont, color: CREAM }}>FICHACERTA</span>
+        </div>
+        <div className="rounded-xl p-5" style={{ background: CREAM }}>{children}</div>
+        {footer && <div className="text-center text-xs mt-4" style={{ color: `${CREAM}99` }}>{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+function Field({ icon, ...props }) {
+  return (
+    <div className="flex items-center gap-2 rounded-md px-3 py-2 mb-3" style={{ background: "#ffffff", border: `1px solid ${INK}22` }}>
+      {icon}
+      <input {...props} className="w-full bg-transparent outline-none text-sm" style={{ color: INK, fontFamily: bodyFont }} />
+    </div>
+  );
+}
+
+function PrimaryButton({ children, disabled, ...props }) {
+  return (
+    <button {...props} disabled={disabled} className="w-full flex items-center justify-center gap-2 rounded-md py-2.5 font-semibold tracking-wide disabled:opacity-50" style={{ background: PITCH, color: CREAM, fontFamily: bodyFont }}>
+      {children}
+    </button>
+  );
+}
+
+export default function FichaCertaApp() {
+  const [stage, setStage] = useState("login"); // login|signup|master|otp|recover|recoverCode|app
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [masterInput, setMasterInput] = useState("");
+  const [otpInput, setOtpInput] = useState("");
+  const [recoverInput, setRecoverInput] = useState("");
+  const [newSenha, setNewSenha] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [token, setToken] = useState(null);
+  const [fichas, setFichas] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [fichasError, setFichasError] = useState("");
+  const [f1Variant, setF1Variant] = useState("protecao");
+
+  const loadFichas = useCallback(async (tok) => {
+    setFichasError("");
+    try {
+      const [f, h] = await Promise.all([
+        api("/fichas/today", { headers: { Authorization: `Bearer ${tok}` } }),
+        api("/fichas/history", { headers: { Authorization: `Bearer ${tok}` } }),
+      ]);
+      setFichas(f);
+      setHistory(h);
+    } catch (err) {
+      setFichasError(
+        `Não foi possível carregar os jogos do backend (${err.message}). ` +
+        `Verifique se API_BASE aponta para o servidor já publicado.`
+      );
+    }
+  }, []);
+
+  const withBusy = (fn) => async (e) => {
+    e.preventDefault();
+    setError(""); setBusy(true);
+    try { await fn(); } catch (err) { setError(err.message); } finally { setBusy(false); }
+  };
+
+  const doSignupStart = withBusy(async () => {
+    if (!email.includes("@") || senha.length < 4) throw new Error("Informe um e-mail válido e uma senha com pelo menos 4 caracteres.");
+    await api("/auth/signup", { method: "POST", body: JSON.stringify({ email, senha }) });
+    setStage("master");
+  });
+
+  const doMaster = withBusy(async () => {
+    const r = await api("/auth/master", { method: "POST", body: JSON.stringify({ email, masterPassword: masterInput }) });
+    if (r.nextStep === "otp") setStage("otp");
+    else setStage("login"); // já validado antes — segue para login normal
+  });
+
+  const doOtp = withBusy(async () => {
+    const r = await api("/auth/otp/verify", { method: "POST", body: JSON.stringify({ email, code: otpInput }) });
+    setToken(r.token);
+    setStage("app");
+    await loadFichas(r.token);
+  });
+
+  const doLogin = withBusy(async () => {
+    try {
+      const r = await api("/auth/login", { method: "POST", body: JSON.stringify({ email, senha }) });
+      setToken(r.token);
+      setStage("app");
+      await loadFichas(r.token);
+    } catch (err) {
+      if (err.message.includes("não validada")) { setStage("master"); return; }
+      throw err;
+    }
+  });
+
+  const doRecoverStart = withBusy(async () => {
+    await api("/auth/recover/start", { method: "POST", body: JSON.stringify({ email }) });
+    setStage("recoverCode");
+  });
+
+  const doRecoverConfirm = withBusy(async () => {
+    await api("/auth/recover/confirm", { method: "POST", body: JSON.stringify({ email, code: recoverInput, novaSenha: newSenha }) });
+    setSenha(newSenha);
+    setStage("login");
+  });
+
+  const logout = () => {
+    setToken(null); setFichas(null); setHistory([]);
+    setStage("login"); setEmail(""); setSenha("");
+  };
+
+  // ---------------- AUTH STAGES ----------------
+  if (stage === "login") {
+    return (
+      <AuthShell footer={
+        <div className="flex flex-col gap-1">
+          <span>Não tem conta? <button className="underline" onClick={() => { setError(""); setStage("signup"); }}>Criar cadastro</button></span>
+          <button className="underline" onClick={() => { setError(""); setStage("recover"); }}>Esqueci minha senha</button>
+        </div>
+      }>
+        <h2 className="text-center mb-4 text-sm uppercase tracking-widest" style={{ color: PITCH }}>Entrar</h2>
+        <form onSubmit={doLogin}>
+          <Field icon={<Mail size={16} color={INK} />} placeholder="E-mail" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+          <Field icon={<Lock size={16} color={INK} />} placeholder="Senha" type="password" value={senha} onChange={e => setSenha(e.target.value)} />
+          {error && <div className="text-xs mb-3" style={{ color: RUST }}>{error}</div>}
+          <PrimaryButton type="submit" disabled={busy}>{busy ? "Entrando..." : "Entrar"} <ChevronRight size={16} /></PrimaryButton>
+        </form>
+      </AuthShell>
+    );
+  }
+
+  if (stage === "signup") {
+    return (
+      <AuthShell footer={<span>Já tem conta? <button className="underline" onClick={() => { setError(""); setStage("login"); }}>Entrar</button></span>}>
+        <h2 className="text-center mb-4 text-sm uppercase tracking-widest" style={{ color: PITCH }}>Criar cadastro</h2>
+        <form onSubmit={doSignupStart}>
+          <Field icon={<Mail size={16} color={INK} />} placeholder="E-mail" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+          <Field icon={<Lock size={16} color={INK} />} placeholder="Criar senha" type="password" value={senha} onChange={e => setSenha(e.target.value)} />
+          {error && <div className="text-xs mb-3" style={{ color: RUST }}>{error}</div>}
+          <PrimaryButton type="submit" disabled={busy}>{busy ? "Enviando..." : "Continuar"} <ChevronRight size={16} /></PrimaryButton>
+        </form>
+      </AuthShell>
+    );
+  }
+
+  if (stage === "master") {
+    return (
+      <AuthShell>
+        <h2 className="text-center mb-1 text-sm uppercase tracking-widest" style={{ color: PITCH }}>Senha mestra</h2>
+        <p className="text-xs text-center mb-4 opacity-60">Obrigatória apenas na primeira validação da conta.</p>
+        <form onSubmit={doMaster}>
+          <Field icon={<KeyRound size={16} color={INK} />} placeholder="Senha mestra" type="password" value={masterInput} onChange={e => setMasterInput(e.target.value)} />
+          {error && <div className="text-xs mb-3" style={{ color: RUST }}>{error}</div>}
+          <PrimaryButton type="submit" disabled={busy}>{busy ? "Validando..." : "Validar"} <ChevronRight size={16} /></PrimaryButton>
+        </form>
+      </AuthShell>
+    );
+  }
+
+  if (stage === "otp") {
+    return (
+      <AuthShell>
+        <h2 className="text-center mb-1 text-sm uppercase tracking-widest" style={{ color: PITCH }}>Confirmação</h2>
+        <p className="text-xs text-center mb-4 opacity-60">Enviamos um código de 6 dígitos para <strong>{email}</strong>. Confira sua caixa de entrada (e o spam).</p>
+        <form onSubmit={doOtp}>
+          <Field icon={<ShieldCheck size={16} color={INK} />} placeholder="Código de 6 dígitos" value={otpInput} onChange={e => setOtpInput(e.target.value)} />
+          {error && <div className="text-xs mb-3" style={{ color: RUST }}>{error}</div>}
+          <PrimaryButton type="submit" disabled={busy}>{busy ? "Confirmando..." : "Confirmar"} <ChevronRight size={16} /></PrimaryButton>
+        </form>
+      </AuthShell>
+    );
+  }
+
+  if (stage === "recover") {
+    return (
+      <AuthShell footer={<button className="underline" onClick={() => { setError(""); setStage("login"); }}>Voltar para entrar</button>}>
+        <h2 className="text-center mb-4 text-sm uppercase tracking-widest" style={{ color: PITCH }}>Recuperar acesso</h2>
+        <form onSubmit={doRecoverStart}>
+          <Field icon={<Mail size={16} color={INK} />} placeholder="E-mail cadastrado" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+          {error && <div className="text-xs mb-3" style={{ color: RUST }}>{error}</div>}
+          <PrimaryButton type="submit" disabled={busy}>{busy ? "Enviando..." : "Enviar código"} <ChevronRight size={16} /></PrimaryButton>
+        </form>
+      </AuthShell>
+    );
+  }
+
+  if (stage === "recoverCode") {
+    return (
+      <AuthShell>
+        <h2 className="text-center mb-1 text-sm uppercase tracking-widest" style={{ color: PITCH }}>Novo acesso</h2>
+        <p className="text-xs text-center mb-4 opacity-60">Digite o código enviado para <strong>{email}</strong> e a nova senha.</p>
+        <form onSubmit={doRecoverConfirm}>
+          <Field icon={<ShieldCheck size={16} color={INK} />} placeholder="Código recebido" value={recoverInput} onChange={e => setRecoverInput(e.target.value)} />
+          <Field icon={<Lock size={16} color={INK} />} placeholder="Nova senha" type="password" value={newSenha} onChange={e => setNewSenha(e.target.value)} />
+          {error && <div className="text-xs mb-3" style={{ color: RUST }}>{error}</div>}
+          <PrimaryButton type="submit" disabled={busy}>{busy ? "Salvando..." : "Redefinir senha"} <ChevronRight size={16} /></PrimaryButton>
+        </form>
+      </AuthShell>
+    );
+  }
+
+  // ---------------- APP ----------------
+  return (
+    <div className="min-h-screen" style={{ background: PITCH, fontFamily: bodyFont }}>
+      <div className="sticky top-0 z-10 px-4 py-3 flex items-center justify-between" style={{ background: PITCH_DARK }}>
+        <div className="flex items-center gap-2">
+          <Ticket color={AMBER} size={22} />
+          <span className="tracking-widest text-lg" style={{ fontFamily: displayFont, color: CREAM }}>FICHACERTA</span>
+        </div>
+        <button onClick={logout} className="flex items-center gap-1 text-xs" style={{ color: `${CREAM}aa` }}>
+          <LogOut size={14} /> Sair
+        </button>
+      </div>
+
+      <div className="max-w-md mx-auto px-4 py-4">
+        {fichasError && (
+          <div className="flex items-start gap-2 rounded-lg p-3 mb-4 text-xs" style={{ background: `${RUST}22`, color: CREAM }}>
+            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+            <span>{fichasError}</span>
+          </div>
+        )}
+
+        {!fichas && !fichasError && (
+          <div className="text-center text-sm py-10" style={{ color: `${CREAM}99` }}>Carregando fichas do dia...</div>
+        )}
+
+        {fichas && (
+          <>
+            <div className="flex items-center gap-2 mb-2">
+              <Shield size={16} color={CREAM} />
+              <span className="text-sm" style={{ color: CREAM }}>Ficha 1 — Poucos jogos & Segurança</span>
+            </div>
+            <div className="flex gap-2 mb-2">
+              <button onClick={() => setF1Variant("protecao")} className="text-xs px-2 py-1 rounded" style={{ background: f1Variant === "protecao" ? AMBER : `${CREAM}22`, color: f1Variant === "protecao" ? INK : CREAM }}>Proteção</button>
+              <button onClick={() => setF1Variant("tendencia")} className="text-xs px-2 py-1 rounded" style={{ background: f1Variant === "tendencia" ? AMBER : `${CREAM}22`, color: f1Variant === "tendencia" ? INK : CREAM }}>Tendência</button>
+            </div>
+            <FichaTicket
+              title={f1Variant === "protecao" ? "Construção: Proteção" : "Construção: Tendência"}
+              icon={<Shield size={18} />}
+              accent={TURF}
+              picks={fichas.ficha1[f1Variant].picks}
+              oddTotal={fichas.ficha1[f1Variant].oddTotal}
+              probTotal={fichas.ficha1[f1Variant].probTotal}
+              code={fichas.ficha1[f1Variant].code}
+            />
+
+            <div className="flex items-center gap-2 mt-6 mb-2">
+              <Flame size={16} color={CREAM} />
+              <span className="text-sm" style={{ color: CREAM }}>Ficha 2 — Mais jogos & Maior odd</span>
+            </div>
+            <FichaTicket
+              title="Construção: Maior retorno"
+              icon={<Flame size={18} />}
+              accent={AMBER}
+              riskNote={fichas.ficha2.riskWarning}
+              picks={fichas.ficha2.picks}
+              oddTotal={fichas.ficha2.oddTotal}
+              probTotal={fichas.ficha2.probTotal}
+              code={fichas.ficha2.code}
+            />
+
+            <div className="mt-6 rounded-lg p-3" style={{ background: `${CREAM}15` }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs uppercase tracking-wide" style={{ color: CREAM }}>Histórico de acertos</span>
+                <RotateCcw size={14} color={CREAM} />
+              </div>
+              {history.length === 0 ? (
+                <div className="text-xs" style={{ color: `${CREAM}77` }}>Ainda sem histórico registrado.</div>
+              ) : (
+                <div className="flex gap-2 flex-wrap">
+                  {history.map((h, i) => (
+                    <div key={i} className="text-center" style={{ width: 40 }}>
+                      <div className="w-full h-2 rounded-full mb-1" style={{ background: h.result === "green" ? TURF : h.result === "red" ? RUST : `${CREAM}33` }} />
+                      <div className="text-[9px]" style={{ color: `${CREAM}88` }}>{h.match_day?.slice(5)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 text-center text-xs px-3 py-3 rounded-lg" style={{ background: `${RUST}22`, color: CREAM }}>
+              {fichas.disclaimer}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
