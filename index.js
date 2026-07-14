@@ -87,4 +87,66 @@ app.post('/login', async (req, res) => {
 app.listen(PORTA, async () => {
   console.log(`🚀 Servidor rodando na porta ${PORTA}`);
   await criarTabelas();
+});// 📌 ROTA: Criar nova ficha
+app.post('/fichas', async (req, res) => {
+  try {
+    const { titulo, descricao, categoria, utilizador_id } = req.body;
+    if (!titulo || !utilizador_id) {
+      return res.status(400).json({ erro: 'Título e utilizador são obrigatórios!' });
+    }
+    const resultado = await pool.query(
+      'INSERT INTO fichas (titulo, descricao, categoria, utilizador_id) VALUES ($1, $2, $3, $4) RETURNING *',
+      [titulo, descricao, categoria, utilizador_id]
+    );
+    res.status(201).json({ mensagem: '✅ Ficha criada!', ficha: resultado.rows[0] });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Erro: ' + erro.message });
+  }
 });
+
+// 📌 ROTA: Ver minhas fichas
+app.get('/fichas/:utilizador_id', async (req, res) => {
+  try {
+    const { utilizador_id } = req.params;
+    const resultado = await pool.query(
+      'SELECT * FROM fichas WHERE utilizador_id = $1 ORDER BY data_criacao DESC',
+      [utilizador_id]
+    );
+    res.json({ total: resultado.rows.length, fichas: resultado.rows });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Erro: ' + erro.message });
+  }
+});
+
+// 📌 ROTA: Editar ficha
+app.put('/fichas/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { titulo, descricao, categoria, utilizador_id } = req.body;
+    const resultado = await pool.query(
+      'UPDATE fichas SET titulo = $1, descricao = $2, categoria = $3 WHERE id = $4 AND utilizador_id = $5 RETURNING *',
+      [titulo, descricao, categoria, id, utilizador_id]
+    );
+    if (resultado.rows.length === 0) return res.status(404).json({ erro: 'Ficha não encontrada!' });
+    res.json({ mensagem: '✅ Ficha atualizada!', ficha: resultado.rows[0] });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Erro: ' + erro.message });
+  }
+});
+
+// 📌 ROTA: Apagar ficha
+app.delete('/fichas/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { utilizador_id } = req.body;
+    const resultado = await pool.query(
+      'DELETE FROM fichas WHERE id = $1 AND utilizador_id = $2 RETURNING *',
+      [id, utilizador_id]
+    );
+    if (resultado.rows.length === 0) return res.status(404).json({ erro: 'Ficha não encontrada!' });
+    res.json({ mensagem: '✅ Ficha apagada!' });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Erro: ' + erro.message });
+  }
+});
+        
