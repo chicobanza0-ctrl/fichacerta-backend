@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const PORTA = process.env.PORT || 3000;
@@ -22,7 +23,7 @@ app.get('/', (req, res) => {
 
 // Criação automática das tabelas
 async function criarTabelas() {
-  try {
+    try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS utilizadores (
         id SERIAL PRIMARY KEY,
@@ -34,21 +35,38 @@ async function criarTabelas() {
     `);
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS categorias (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(50) NOT NULL,
+        cor VARCHAR(7) DEFAULT '#3b82f6',
+        utilizador_id INT REFERENCES utilizadores(id) ON DELETE CASCADE,
+        UNIQUE(nome, utilizador_id)
+      );
+    `);
+    `);
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS fichas (
         id SERIAL PRIMARY KEY,
         titulo VARCHAR(150) NOT NULL,
         descricao TEXT,
-        categoria VARCHAR(50),
+        categoria_id INT REFERENCES categorias(id) ON DELETE SET NULL,
         data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         utilizador_id INT REFERENCES utilizadores(id) ON DELETE CASCADE
       );
     `);
-    console.log('✅ Tabelas prontas no banco!');
+    console.log('✅ Todas as tabelas prontas!');
   } catch (erro) {
     console.error('❌ Erro nas tabelas:', erro);
   }
 }
 
+    
+
+  
+
+    
+      
 // 🚀 ROTA: Cadastrar utilizador
 app.post('/cadastrar', async (req, res) => {
   try {
