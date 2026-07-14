@@ -23,7 +23,7 @@ app.get('/', (req, res) => {
 
 // Criação automática das tabelas
 async function criarTabelas() {
-    try {
+  try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS utilizadores (
         id SERIAL PRIMARY KEY,
@@ -43,7 +43,6 @@ async function criarTabelas() {
         UNIQUE(nome, utilizador_id)
       );
     `);
-    `);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS fichas (
@@ -61,60 +60,49 @@ async function criarTabelas() {
   }
 }
 
-    
-
-  
-
-    
-      
-// 🚀 ROTA: Cadastrar utilizador
+// 🚀 ROTA: Cadastrar utilizador (com senha protegida)
 app.post('/cadastrar', async (req, res) => {
   try {
     const { nome, email, senha } = req.body;
     if (!nome || !email || !senha) {
       return res.status(400).json({ erro: 'Preenche nome, e-mail e senha!' });
     }
+    const senhaCript = await bcrypt.hash(senha, 10);
     const resultado = await pool.query(
       'INSERT INTO utilizadores (nome, email, senha) VALUES ($1, $2, $3) RETURNING id, nome, email, criado_em',
-      [nome, email, senha]
+      [nome, email, senhaCript]
     );
-    res.status(201).json({ mensagem: '✅ Cadastro feito!', utilizador: resultado.rows[0] });
+    res.status(201).json({ mensagem: '✅ Conta criada com segurança!', utilizador: resultado.rows[0] });
   } catch (erro) {
     if (erro.code === '23505') return res.status(409).json({ erro: '⚠️ E-mail já cadastrado!' });
     res.status(500).json({ erro: 'Erro: ' + erro.message });
   }
 });
 
-// 🚀 ROTA: Fazer login
+// 🚀 ROTA: Fazer login (verifica senha protegida)
 app.post('/login', async (req, res) => {
   try {
     const { email, senha } = req.body;
     if (!email || !senha) return res.status(400).json({ erro: 'Preenche e-mail e senha!' });
-    const resultado = await pool.query(
-      'SELECT * FROM utilizadores WHERE email = $1 AND senha = $2',
-      [email, senha]
-    );
+    const resultado = await pool.query('SELECT * FROM utilizadores WHERE email = $1', [email]);
     if (resultado.rows.length === 0) return res.status(401).json({ erro: '❌ E-mail ou senha errados!' });
-    res.json({ mensagem: '✅ Login feito!', utilizador: resultado.rows[0] });
+    const utilizador = resultado.rows[0];
+    const senhaCorreta = await bcrypt.compare(senha, utilizador.senha);
+    if (!senhaCorreta) return res.status(401).json({ erro: '❌ E-mail ou senha errados!' });
+    res.json({ mensagem: '✅ Login feito com segurança!', utilizador: { id: utilizador.id, nome: utilizador.nome, email: utilizador.email } });
   } catch (erro) {
     res.status(500).json({ erro: 'Erro: ' + erro.message });
   }
 });
 
-// Iniciar servidor
-app.listen(PORTA, async () => {
-  console.log(`🚀 Servidor rodando na porta ${PORTA}`);
-  await criarTabelas();
-});// 📌 ROTA: Criar nova ficha
+// 🚀 ROTA: Criar nova ficha
 app.post('/fichas', async (req, res) => {
   try {
-    const { titulo, descricao, categoria, utilizador_id } = req.body;
-    if (!titulo || !utilizador_id) {
-      return res.status(400).json({ erro: 'Título e utilizador são obrigatórios!' });
-    }
+    const { titulo, descricao, categoria_id, utilizador_id } = req.body;
+    if (!titulo || !utilizador_id) return res.status(400).json({ erro: 'Título e utilizador são obrigatórios!' });
     const resultado = await pool.query(
-      'INSERT INTO fichas (titulo, descricao, categoria, utilizador_id) VALUES ($1, $2, $3, $4) RETURNING *',
-      [titulo, descricao, categoria, utilizador_id]
+      'INSERT INTO fichas (titulo, descricao, categoria_id, utilizador_id) VALUES ($1, $2, $3, $4) RETURNING *',
+      [titulo, descricao, categoria_id, utilizador_id]
     );
     res.status(201).json({ mensagem: '✅ Ficha criada!', ficha: resultado.rows[0] });
   } catch (erro) {
@@ -122,7 +110,7 @@ app.post('/fichas', async (req, res) => {
   }
 });
 
-// 📌 ROTA: Ver minhas fichas
+// 🚀 ROTA: Ver minhas fichas
 app.get('/fichas/:utilizador_id', async (req, res) => {
   try {
     const { utilizador_id } = req.params;
@@ -136,14 +124,14 @@ app.get('/fichas/:utilizador_id', async (req, res) => {
   }
 });
 
-// 📌 ROTA: Editar ficha
+// 🚀 ROTA: Editar ficha
 app.put('/fichas/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { titulo, descricao, categoria, utilizador_id } = req.body;
+    const { titulo, descricao, categoria_id, utilizador_id } = req.body;
     const resultado = await pool.query(
-      'UPDATE fichas SET titulo = $1, descricao = $2, categoria = $3 WHERE id = $4 AND utilizador_id = $5 RETURNING *',
-      [titulo, descricao, categoria, id, utilizador_id]
+      'UPDATE fichas SET titulo = $1, descricao = $2, categoria_id = $3 WHERE id = $4 AND utilizador_id = $5 RETURNING *',
+      [titulo, descricao, categoria_id, id, utilizador_id]
     );
     if (resultado.rows.length === 0) return res.status(404).json({ erro: 'Ficha não encontrada!' });
     res.json({ mensagem: '✅ Ficha atualizada!', ficha: resultado.rows[0] });
@@ -152,7 +140,7 @@ app.put('/fichas/:id', async (req, res) => {
   }
 });
 
-// 📌 ROTA: Apagar ficha
+// 🚀 ROTA: Apagar ficha
 app.delete('/fichas/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -167,4 +155,62 @@ app.delete('/fichas/:id', async (req, res) => {
     res.status(500).json({ erro: 'Erro: ' + erro.message });
   }
 });
-        
+
+// 🚀 ROTA: Criar categoria personalizada
+app.post('/categorias', async (req, res) => {
+  try {
+    const { nome, cor, utilizador_id } = req.body;
+    if (!nome || !utilizador_id) return res.status(400).json({ erro: 'Nome da categoria obrigatório!' });
+    const resultado = await pool.query(
+      'INSERT INTO categorias (nome, cor, utilizador_id) VALUES ($1, $2, $3) RETURNING *',
+      [nome, cor || '#3b82f6', utilizador_id]
+    );
+    res.status(201).json({ mensagem: '✅ Categoria criada!', categoria: resultado.rows[0] });
+  } catch (erro) {
+    if (erro.code === '23505') return res.status(409).json({ erro: '⚠️ Essa categoria já existe!' });
+    res.status(500).json({ erro: 'Erro: ' + erro.message });
+  }
+});
+
+// 🚀 ROTA: Ver minhas categorias
+app.get('/categorias/:utilizador_id', async (req, res) => {
+  try {
+    const { utilizador_id } = req.params;
+    const resultado = await pool.query('SELECT * FROM categorias WHERE utilizador_id = $1 ORDER BY nome', [utilizador_id]);
+    res.json({ categorias: resultado.rows });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Erro: ' + erro.message });
+  }
+});
+
+// 🚀 ROTA: Buscar fichas por palavra
+app.get('/fichas/buscar/:utilizador_id', async (req, res) => {
+  try {
+    const { utilizador_id } = req.params;
+    const { q } = req.query;
+    const busca = `%${q}%`;
+    const resultado = await pool.query(`
+      SELECT f.*, c.nome as categoria_nome, c.cor as categoria_cor
+      FROM fichas f
+      LEFT JOIN categorias c ON f.categoria_id = c.id
+      WHERE f.utilizador_id = $1
+      AND (f.titulo ILIKE $2 OR f.descricao ILIKE $2 OR c.nome ILIKE $2)
+      ORDER BY f.data_criacao DESC
+    `, [utilizador_id, busca]);
+    res.json({ total: resultado.rows.length, fichas: resultado.rows });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Erro: ' + erro.message });
+  }
+});
+
+// 🚀 ROTA: Recuperar senha
+app.post('/recuperar-senha', (req, res) => {
+  res.json({ mensagem: '📧 Se precisares, envia e-mail para suporte@fichacerta.ao com o teu e-mail cadastrado!' });
+});
+
+// Ligar servidor
+app.listen(PORTA, async () => {
+  console.log('🚀 Servidor rodando na porta ' + PORTA);
+  await criarTabelas();
+});
+  
